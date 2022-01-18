@@ -12,9 +12,11 @@ private const val STROKE_WIDTH = 12f // has to be float
 
 class MyCanvasView(context: Context) : View(context) {
 
-    // These are your bitmap and canvas for caching what has been drawn before.
-    private lateinit var extraCanvas: Canvas
-    private lateinit var extraBitmap: Bitmap
+    // Path representing the drawing so far
+    private val drawing = Path()
+
+    // Path representing what's currently being drawn
+    private val curPath = Path()
 
     private lateinit var frame: Rect
 
@@ -58,18 +60,6 @@ class MyCanvasView(context: Context) : View(context) {
     override fun onSizeChanged(width: Int, height: Int, oldWidth: Int, oldHeight: Int) {
         super.onSizeChanged(width, height, oldWidth, oldHeight)
 
-        // a new bitmap and canvas are created every time the function executes.
-        // You need a new bitmap, because the size has changed. However, this is a memory leak,
-        // leaving the old bitmaps around.
-        // To fix this, recycle extraBitmap before creating the next one.
-        if (::extraBitmap.isInitialized) extraBitmap.recycle()
-        // create an instance of Bitmap with the new width and height, which are the screen size,
-        // and assign it to extraBitmap. The third argument is the bitmap color configuration.
-        // ARGB_8888 stores each color in 4 bytes and is recommended.
-        extraBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        extraCanvas = Canvas(extraBitmap)
-        extraCanvas.drawColor(backgroundColor)
-
         // Calculate a rectangular frame around the picture.
         val inset = 40
         frame = Rect(inset, inset, width - inset, height - inset)
@@ -82,9 +72,26 @@ class MyCanvasView(context: Context) : View(context) {
 
         // Note: The 2D coordinate system used for drawing on a Canvas is in pixels,
         // and the origin (0,0) is at the top left corner of the Canvas.
-        canvas.drawBitmap(extraBitmap, 0f, 0f, null)
-        // Draw a frame around the canvas.
+
+        canvas.drawColor(backgroundColor)
+        // Draw the drawing so far
+        canvas.drawPath(drawing, paint)
+        // Draw any current squiggle
+        canvas.drawPath(curPath, paint)
+        // Draw a frame around the canvas
         canvas.drawRect(frame, paint)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        motionTouchEventX = event.x
+        motionTouchEventY = event.y
+
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> touchStart()
+            MotionEvent.ACTION_MOVE -> touchMove()
+            MotionEvent.ACTION_UP -> touchUp()
+        }
+        return true
     }
 
     // Reset the path, move to the x-y coordinates of the touch event
@@ -105,26 +112,20 @@ class MyCanvasView(context: Context) : View(context) {
             path.quadTo(currentX, currentY, (motionTouchEventX + currentX) / 2, (motionTouchEventY + currentY) / 2)
             currentX = motionTouchEventX
             currentY = motionTouchEventY
-            // Draw the path in the extra bitmap to cache it.
-            extraCanvas.drawPath(path, paint)
+            // Draw the path in the extra bitmap to save it.
+            curPath.addPath(path)
         }
+        // Invalidate() is inside the touchMove() under ACTION_MOVE because there are many other
+        // types of motion events passed into this listener, and we don't want to invalidate the
+        // view for those.
         invalidate()
     }
 
     private fun touchUp() {
-        // Reset the path so it doesn't get drawn again.
-        path.reset()
+        // Add the current path to the drawing so far
+        drawing.addPath(curPath)
+        // Rewind the current path for the next touch
+        curPath.reset()
     }
 
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        motionTouchEventX = event.x
-        motionTouchEventY = event.y
-
-        when (event.action) {
-            MotionEvent.ACTION_DOWN -> touchStart()
-            MotionEvent.ACTION_MOVE -> touchMove()
-            MotionEvent.ACTION_UP -> touchUp()
-        }
-        return true
-    }
 }
