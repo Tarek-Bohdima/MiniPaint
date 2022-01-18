@@ -108,6 +108,9 @@ class MyCanvasView(context: Context) : View(context) {
             // Draw the path in the extra bitmap to cache it.
             extraCanvas.drawPath(path, paint)
         }
+        // Invalidate() is inside the touchMove() under ACTION_MOVE because there are many other
+        // types of motion events passed into this listener, and we don't want to invalidate the
+        // view for those.
         invalidate()
     }
 
